@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {escrowxrunToken} from "../src/Token.sol";
+import {escrowxrunToken} from "../contracts/LaunchpadToken.sol";
 
 contract Sink {
     uint256 public a;
@@ -36,9 +36,11 @@ contract TokenTest is Test {
 
     // overpay is refunded to an EOA
     function test_refundOnOverpay() public {
+        uint256 cost = t.calculateCost(1e18); // quote before supply moves
         vm.prank(buyer);
         t.mint{value: 1 ether}(1e18);
-        assertApproxEqAbs(buyer.balance, 100 ether - t.calculateCost(1e18), 1e12); // gas taken from sender
+        assertEq(t.balanceOf(buyer), 1e18);
+        assertEq(buyer.balance, 100 ether - cost);
     }
 
     // known gaps, kept as failing-by-design assertions
@@ -52,8 +54,11 @@ contract TokenTest is Test {
     }
 
     function test_tokensAreNonTransferable() public {
+        uint256 cost = t.calculateCost(1e18); // quote first: a prank is consumed by the next call, staticcalls included
         vm.prank(buyer);
-        t.mint{value: t.calculateCost(1e18)}(1e18);
+        t.mint{value: cost}(1e18);
+        assertEq(t.balanceOf(buyer), 1e18); // holder, so a missing transfer is the only reason to fail
+        vm.prank(buyer);
         (bool ok,) = address(t).call(abi.encodeWithSignature("transfer(address,uint256)", address(0xBEEF), 1));
         assertFalse(ok);
     }
